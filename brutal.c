@@ -218,6 +218,25 @@ static void brutal_update_rate(struct sock *sk)
     rate *= 100;
     rate = div_u64(rate, ack_rate);
 
+    // 引入随机波动: 在80%到100%之间选择一个随机倍率
+    u32 random_fluctuation = 80 + get_random_u32() % 21; // 生成 80-100 范围的随机波动因子
+    rate = div_u64(rate * random_fluctuation, 100); // 应用随机波动因子到发送速率
+
+    cwnd = div_u64(rate, MSEC_PER_SEC);
+    cwnd *= rtt_ms;
+    cwnd /= mss;
+    cwnd *= brutal->cwnd_gain;
+    cwnd /= 10;
+    cwnd = max_t(u32, cwnd, MIN_CWND);
+
+    brutal_tcp_snd_cwnd_set(tp, min(cwnd, tp->snd_cwnd_clamp));
+
+    WRITE_ONCE(sk->sk_pacing_rate, min_t(u64, rate, READ_ONCE(sk->sk_max_pacing_rate)));
+}
+
+    rate *= 100;
+    rate = div_u64(rate, ack_rate);
+
     // The order here is chosen carefully to avoid overflow as much as possible
     cwnd = div_u64(rate, MSEC_PER_SEC);
     cwnd *= rtt_ms;
